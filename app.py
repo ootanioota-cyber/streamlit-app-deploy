@@ -1,46 +1,58 @@
 import streamlit as st
+from dotenv import load_dotenv
+from langchain_openai import ChatOpenAI
+from langchain_core.prompts import ChatPromptTemplate
+from langchain_core.output_parsers import StrOutputParser
 
-st.title("サンプルアプリ②: 少し複雑なWebアプリ")
+# .envファイルからOpenAI APIキーを読み込みます
+load_dotenv()
 
-st.write("##### 動作モード1: 文字数カウント")
-st.write("入力フォームにテキストを入力し、「実行」ボタンを押すことで文字数をカウントできます。")
-st.write("##### 動作モード2: BMI値の計算")
-st.write("身長と体重を入力することで、肥満度を表す体型指数のBMI値を算出できます。")
+# --- 1. AIに回答させる関数を定義 ---
+# 「入力テキスト」と「専門家の種類」を引数として受け取ります
+def ask_ai_expert(user_text, expert_type):
+    llm = ChatOpenAI(model="gpt-3.5-turbo")
+    
+    # ラジオボタンの選択値に応じて、システムメッセージ（役割）を切り替えます
+    if expert_type == "料理の専門家":
+        system_msg = "あなたは一流のシェフです。初心者でも作れる美味しいレシピやコツを教えてください。"
+    else:
+        system_msg = "あなたはベテランの旅行ガイドです。おすすめの観光スポットや現地の楽しみ方を教えてください。"
 
-selected_item = st.radio(
-    "動作モードを選択してください。",
-    ["文字数カウント", "BMI値の計算"]
+    # プロンプトの設定
+    prompt = ChatPromptTemplate.from_messages([
+        ("system", system_msg),
+        ("user", "{input}")
+    ])
+    
+    # チェーン（一連の流れ）を作成して実行
+    chain = prompt | llm | StrOutputParser()
+    return chain.invoke({"input": user_text})
+
+# --- 2. 画面（UI）のデザイン ---
+st.title("AI専門家相談アプリ")
+
+# ユーザーへの操作方法の明示
+st.info("""
+【使い方】
+1. 左側のラジオボタンで、相談したい専門家を選んでください。
+2. 下の入力欄に質問したいことを書いてEnterを押してください。
+""")
+
+# ラジオボタンで専門家の種類を選択
+expert_choice = st.radio(
+    "相談する専門家を選んでください：",
+    ("料理の専門家", "旅行の専門家")
 )
 
-st.divider()
+# 入力フォーム
+user_input = st.text_input("質問を入力してください：")
 
-if selected_item == "文字数カウント":
-    input_message = st.text_input(label="文字数のカウント対象となるテキストを入力してください。")
-    text_count = len(input_message)
-
-else:
-    height = st.text_input(label="身長（cm）を入力してください。")
-    weight = st.text_input(label="体重（kg）を入力してください。")
-
-if st.button("実行"):
-    st.divider()
-
-    if selected_item == "文字数カウント":
-        if input_message:
-            st.write(f"文字数: **{text_count}**")
-
-        else:
-            st.error("カウント対象となるテキストを入力してから「実行」ボタンを押してください。")
-
-    else:
-        if height and weight:
-            try:
-                bmi = round(int(weight) / ((int(height)/100) ** 2), 1)
-                st.write(f"BMI値: {bmi}")
-
-            except ValueError as e:
-                st.error("身長と体重は数値で入力してください。")
-
-        else:
-            st.error("身長と体重をどちらも入力してください。")
-            
+# 入力があったらAIに聞く
+if user_input:
+    with st.spinner("AIが回答を生成中..."):
+        # 定義した関数を呼び出し、戻り値（回答）を受け取ります
+        response = ask_ai_expert(user_input, expert_choice)
+        
+        # 回答を画面に表示
+        st.subheader(f"【{expert_choice}からの回答】")
+        st.write(response)
